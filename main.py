@@ -21,12 +21,53 @@ def start(update: Update, context: CallbackContext) -> None:
     update.message.reply_text(f"Hello from PyCharm, {username}")
 
 
+def alarm(context: CallbackContext) -> None:
+    """Send the alarm message."""
+    job = context.job
+    chat_id = job.context
+    text = 'I am alive!'
+    if text:
+        context.bot.send_message(job.context, text=text)
+
+
+def remove_job_if_exists(name: str, context: CallbackContext) -> bool:
+    """Remove job with given name. Returns whether job was removed."""
+    current_jobs = context.job_queue.get_jobs_by_name(name)
+    if not current_jobs:
+        return False
+    for job in current_jobs:
+        job.schedule_removal()
+    return True
+
+
+def set_timer(update: Update, context: CallbackContext) -> None:
+    chat_id = update.message.chat_id
+
+    try:
+        due = int(context.args[0])
+        if due < 0:
+            update.message.reply_text('Sorry, we can not go back to the past!')
+            return
+
+        is_job_removed = remove_job_if_exists(str(chat_id), context)
+        context.job_queue.run_repeating(alarm, interval=due, context=chat_id, name=str(chat_id))
+
+        text = 'Timer successfully set!'
+        if is_job_removed:
+            text += ' Old one was removed.'
+        update.message.reply_text(text)
+
+    except (IndexError, ValueError) as e:
+        update.message.reply_text(f'Usage: /set <seconds> {e}')
+
+
 def main() -> None:
     updater = Updater(API_KEY)
 
     dispatcher = updater.dispatcher
 
     dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CommandHandler("set", set_timer))
 
     updater.start_polling()
     updater.idle()
