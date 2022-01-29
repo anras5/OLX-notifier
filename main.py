@@ -9,6 +9,7 @@ load_dotenv()
 
 API_KEY = os.environ.get('API_KEY')
 DEVELOPER_CHAT_ID = os.environ.get('DEVELOPER_CHAT_ID')
+PORT = int(os.environ.get('PORT', 5000))
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -69,7 +70,11 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("set", set_timer))
 
-    updater.start_polling()
+    # updater.start_polling()
+    updater.start_webhook(listen="0.0.0.0",
+                          port=PORT,
+                          url_path=API_KEY)
+    updater.bot.setWebhook('https://olx-notifier-v2.herokuapp.com/' + API_KEY)
     updater.idle()
 
 
