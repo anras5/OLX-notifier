@@ -9,7 +9,7 @@ load_dotenv()
 
 API_KEY = os.environ.get('API_KEY')
 DEVELOPER_CHAT_ID = os.environ.get('DEVELOPER_CHAT_ID')
-PORT = int(os.environ.get('PORT', 5000))
+PORT = int(os.environ.get('PORT', '8443'))
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -62,6 +62,14 @@ def set_timer(update: Update, context: CallbackContext) -> None:
         update.message.reply_text(f'Usage: /set <seconds> {e}')
 
 
+def unset(update: Update, context: CallbackContext) -> None:
+    """Remove the job if the user changed their mind."""
+    chat_id = update.message.chat_id
+    job_removed = remove_job_if_exists(str(chat_id), context)
+    text = 'Timer successfully cancelled!' if job_removed else 'You have no active timer.'
+    update.message.reply_text(text)
+
+
 def main() -> None:
     updater = Updater(API_KEY)
 
@@ -69,6 +77,7 @@ def main() -> None:
 
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("set", set_timer))
+    dispatcher.add_handler(CommandHandler("unset", unset))
 
     # updater.start_polling()
     updater.start_webhook(listen="0.0.0.0",
