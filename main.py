@@ -82,8 +82,8 @@ def main() -> None:
     # updater.start_polling()
     updater.start_webhook(listen="0.0.0.0",
                           port=PORT,
-                          url_path=API_KEY)
-    updater.bot.setWebhook('https://olx-notifier-v2.herokuapp.com/' + API_KEY)
+                          url_path=API_KEY,
+                          webhook_url='https://olx-notifier-v2.herokuapp.com/' + API_KEY)
     updater.idle()
 
 
