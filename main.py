@@ -1,14 +1,15 @@
-from dotenv import load_dotenv
 import os
 import logging
+# from dotenv import load_dotenv
 
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, ConversationHandler, CallbackContext, Filters
 
 from olx_notifier import message_maker
 from data_handler import DataHandler
+from keep_alive import keep_alive
 
-load_dotenv()
+# load_dotenv()
 
 API_KEY = os.environ.get('API_KEY')
 DEVELOPER_CHAT_ID = os.environ.get('DEVELOPER_CHAT_ID')
@@ -177,4 +178,5 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    keep_alive()
     main()
