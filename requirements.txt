@@ -1,2 +1,4 @@
 python-dotenv~=0.19.2
+requests~=2.27.1
+beautifulsoup4~=4.10.0
 python-telegram-bot~=13.10
