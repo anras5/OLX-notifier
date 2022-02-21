@@ -50,7 +50,7 @@ class DataHandler:
         with open(self.path, "r") as json_file:
             data = json.load(json_file)
 
-            if user_id not in data.keys():
+            if str(user_id) not in data.keys():
                 data[user_id] = {}
 
         with open(self.path, "w") as json_file:

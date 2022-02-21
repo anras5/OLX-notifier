@@ -1,6 +1,6 @@
 import os
 import logging
-# from dotenv import load_dotenv
+from dotenv import load_dotenv
 
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, ConversationHandler, CallbackContext, Filters
@@ -9,9 +9,9 @@ from olx_notifier import message_maker
 from data_handler import DataHandler
 from keep_alive import keep_alive
 
-# load_dotenv()
+load_dotenv()
 
-API_KEY = os.environ.get('API_KEY')
+API_KEY = os.environ.get('PEEPOLEAVEBOT_API_KEY')
 DEVELOPER_CHAT_ID = os.environ.get('DEVELOPER_CHAT_ID')
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -70,7 +70,7 @@ def add_link(update: Update, context: CallbackContext) -> int:
     chat_id = update.message.chat_id
     name = context.user_data['new_name']
     url = update.message.text
-    if url.startswith('no link'):
+    if url.lower().startswith('no link'):
         url = f'https://www.olx.pl/poznan/q-{name}/'
 
     data = data_handler.get_data_by_id(chat_id)
@@ -165,7 +165,7 @@ def main() -> None:
         entry_points=[CommandHandler('add', add)],
         states={
             NAME: [MessageHandler(Filters.regex(r"^(?!\/cancel$)"), add_name)],
-            LINK: [MessageHandler(Filters.regex(r"^(https:\/\/.*olx.pl\/.*|no link)$"), add_link)]
+            LINK: [MessageHandler(Filters.regex(r"^(https:\/\/.*olx.pl\/.*|(?i)no link)$"), add_link)]
         },
         fallbacks=[CommandHandler('cancel', cancel)]))
     dispatcher.add_handler(CommandHandler('delete', delete))
@@ -178,5 +178,5 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    keep_alive()
+    # keep_alive()
     main()
