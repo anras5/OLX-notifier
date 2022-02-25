@@ -2,11 +2,12 @@ import os
 import logging
 from dotenv import load_dotenv
 
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Updater, CommandHandler, MessageHandler, ConversationHandler, CallbackContext, Filters
 
 from olx_notifier import message_maker
 from data_handler import DataHandler
+from link_creator import LinkCreator
 from keep_alive import keep_alive
 
 load_dotenv()
@@ -18,9 +19,14 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 data_handler = DataHandler()
+link_creator = LinkCreator()
 
-NAME, LINK = 0, 1
-SECONDS = 10
+NAME, LINK, LOCATION, DISTANCE, PRICE, CATEGORY = range(6)
+LOCATIONS = ['Poland', 'Poznan', 'Warszawa']
+DISTANCES = ['0', '2', '5', '10', '15', '30', '50', '75', '100']
+CATEGORIES = ['Motoryzacja', 'Motoryzacja/Samochody', 'Motoryzacja/Motocykle-skutery', 'Muzyka-edukacja/Instrumenty',
+              'Oferty']
+SECONDS = 15
 
 
 def start(update: Update, context: CallbackContext) -> None:
@@ -54,11 +60,11 @@ def add(update: Update, context: CallbackContext) -> int:
 
 def add_name(update: Update, context: CallbackContext) -> int:
     """Stores the name of the new item"""
-    context.user_data['new_name'] = update.message.text
+    context.user_data['name'] = update.message.text
 
     update.message.reply_text(
         'Thank you!'
-        ' Now you can send me the link to the item or you can send "no link" and I will create one myself.',
+        ' Now you can send me the link to the item or you can type "no link" to make one with the creator.',
         parse_mode='HTML'
     )
 
@@ -68,22 +74,97 @@ def add_name(update: Update, context: CallbackContext) -> int:
 def add_link(update: Update, context: CallbackContext) -> int:
     """Stores the url to the new item"""
     chat_id = update.message.chat_id
-    name = context.user_data['new_name']
+    name = context.user_data['name']
     url = update.message.text
     if url.lower().startswith('no link'):
-        url = f'https://www.olx.pl/poznan/q-{name}/'
+        reply_keyboard = [LOCATIONS]
+        update.message.reply_text('All right. Then tell me in what location do you want to search.',
+                                  reply_markup=ReplyKeyboardMarkup(
+                                      reply_keyboard,
+                                      one_time_keyboard=True,
+                                      input_field_placeholder='Choose the location.')
+                                  )
+        return LOCATION
+    else:
+        data = data_handler.get_data_by_id(chat_id)
+        data[name] = {"Number": 0, "Url": url}
+        data_handler.update_user_data(chat_id, data)
+        context.user_data.clear()
+        update.message.reply_text(f'Successfully added {name} to the database.')
+
+        return ConversationHandler.END
+
+
+def add_location(update: Update, context: CallbackContext) -> int:
+    """Saves the location of the new item"""
+    context.user_data['location'] = update.message.text.lower()
+    if context.user_data['location'] in {'poznan', 'warszawa'}:
+        reply_keyboard = [DISTANCES]
+        update.message.reply_text('All right. Now choose the search radius.',
+                                  reply_markup=ReplyKeyboardMarkup(
+                                      reply_keyboard,
+                                      one_time_keyboard=True,
+                                      input_field_placeholder='Choose the search radius.')
+                                  )
+        return DISTANCE
+    else:
+        update.message.reply_text('All right. Now choose the price.\nType FROM-TO range. For example 200-500.')
+        return PRICE
+
+
+def add_distance(update: Update, context: CallbackContext) -> int:
+    """Saves the search radius"""
+    context.user_data['distance'] = update.message.text
+    update.message.reply_text('All right. Now choose the price.\n'
+                              'Type FROM-TO range. For example 200-500. Type 0-0 to skip this step.',
+                              reply_markup=ReplyKeyboardRemove())
+    return PRICE
+
+
+def add_price(update: Update, context: CallbackContext) -> int:
+    """Saves the price range"""
+    price_from, price_to = update.message.text.split('-')
+
+    if price_from > price_to:
+        update.message.reply_text('Wrong usage. FROM has to be lower than TO. Try again.')
+        return PRICE
+    else:
+        if price_from == price_to == '0':
+            pass
+        elif price_from <= price_to:
+            context.user_data['price_from'] = price_from
+            context.user_data['price_to'] = price_to
+
+        reply_keyboard = [CATEGORIES]
+        update.message.reply_text('All right. Last question: Category.',
+                                  reply_markup=ReplyKeyboardMarkup(
+                                      reply_keyboard,
+                                      one_time_keyboard=True,
+                                      input_field_placeholder='Choose category.'
+                                  ))
+        return CATEGORY
+
+
+def add_category(update: Update, context: CallbackContext) -> int:
+    """Saves the category and uploads gathered information to json"""
+    context.user_data['category'] = update.message.text.lower()
+    name = context.user_data['name']
+    url = link_creator.create_link(context.user_data)
+    chat_id = update.message.chat_id
 
     data = data_handler.get_data_by_id(chat_id)
     data[name] = {"Number": 0, "Url": url}
     data_handler.update_user_data(chat_id, data)
-    update.message.reply_text(f'Successfully added {name} to the database.')
+    update.message.reply_text(f'Successfully added {name} to the database.', reply_markup=ReplyKeyboardRemove())
 
+    context.user_data.clear()
     return ConversationHandler.END
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
     """Cancels and ends the conversation."""
     update.message.reply_text('Okay. Back to the main menu. Press /start to begin.', parse_mode='HTML')
+    context.user_data.clear()
 
     return ConversationHandler.END
 
@@ -165,7 +246,13 @@ def main() -> None:
         entry_points=[CommandHandler('add', add)],
         states={
             NAME: [MessageHandler(Filters.regex(r"^(?!\/cancel$)"), add_name)],
-            LINK: [MessageHandler(Filters.regex(r"^(https:\/\/.*olx.pl\/.*|(?i)no link)$"), add_link)]
+            LINK: [MessageHandler(Filters.regex(r"^(https:\/\/.*olx.pl\/.*|(?i)no link)$"), add_link)],
+            LOCATION: [MessageHandler(Filters.text(LOCATIONS), add_location)],
+            DISTANCE: [MessageHandler(Filters.text(DISTANCES), add_distance)],
+            PRICE: [MessageHandler(Filters.regex(r"^([0-9]|[0-9][0-9]|[0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]|"
+                                                 r"[0-9][0-9][0-9][0-9][0-9])-([0-9]|[0-9][0-9]|[0-9][0-9][0-9]|"
+                                                 r"[0-9][0-9][0-9][0-9])$"), add_price)],
+            CATEGORY: [MessageHandler(Filters.text(CATEGORIES), add_category)]
         },
         fallbacks=[CommandHandler('cancel', cancel)]))
     dispatcher.add_handler(CommandHandler('delete', delete))
