@@ -23,9 +23,14 @@ link_creator = LinkCreator()
 
 NAME, LINK, LOCATION, DISTANCE, PRICE, CATEGORY = range(6)
 LOCATIONS = ['Poland', 'Poznan', 'Warszawa']
-DISTANCES = ['0', '2', '5', '10', '15', '30', '50', '75', '100']
-CATEGORIES = ['Motoryzacja', 'Motoryzacja/Samochody', 'Motoryzacja/Motocykle-skutery', 'Muzyka-edukacja/Instrumenty',
-              'Oferty']
+DISTANCES = ['0', '5', '10', '15', '30', '50', '75', '100']
+CATEGORIES = {
+    'Motoryzacja': 'motoryzacja',
+    'Samochody': 'motoryzacja/samochody',
+    'Motorki': 'motoryzacja/motocykle-skutery',
+    'Instrumenty': 'Muzyka-edukacja/Instrumenty',
+    'Pozostałe': 'Oferty'
+}
 SECONDS = 15
 
 
@@ -82,12 +87,13 @@ def add_link(update: Update, context: CallbackContext) -> int:
                                   reply_markup=ReplyKeyboardMarkup(
                                       reply_keyboard,
                                       one_time_keyboard=True,
-                                      input_field_placeholder='Choose the location.')
+                                      input_field_placeholder='Choose the location.',
+                                      resize_keyboard=True)
                                   )
         return LOCATION
     else:
         data = data_handler.get_data_by_id(chat_id)
-        data[name] = {"Number": 0, "Url": url}
+        data[name] = {"Number": 0, "Counter": 0, "Url": url}
         data_handler.update_user_data(chat_id, data)
         context.user_data.clear()
         update.message.reply_text(f'Successfully added {name} to the database.')
@@ -99,7 +105,7 @@ def add_location(update: Update, context: CallbackContext) -> int:
     """Saves the location of the new item"""
     context.user_data['location'] = update.message.text.lower()
     if context.user_data['location'] in {'poznan', 'warszawa'}:
-        reply_keyboard = [DISTANCES]
+        reply_keyboard = [DISTANCES[:4], DISTANCES[4:]]
         update.message.reply_text('All right. Now choose the search radius.',
                                   reply_markup=ReplyKeyboardMarkup(
                                       reply_keyboard,
@@ -123,7 +129,8 @@ def add_distance(update: Update, context: CallbackContext) -> int:
 
 def add_price(update: Update, context: CallbackContext) -> int:
     """Saves the price range"""
-    price_from, price_to = update.message.text.split('-')
+    price_from, price_to = map(int, update.message.text.split('-'))
+    print(price_from, price_to)
 
     if price_from > price_to:
         update.message.reply_text('Wrong usage. FROM has to be lower than TO. Try again.')
@@ -132,28 +139,31 @@ def add_price(update: Update, context: CallbackContext) -> int:
         if price_from == price_to == '0':
             pass
         elif price_from <= price_to:
-            context.user_data['price_from'] = price_from
-            context.user_data['price_to'] = price_to
+            context.user_data['price_from'] = str(price_from)
+            context.user_data['price_to'] = str(price_to)
 
-        reply_keyboard = [CATEGORIES]
+        categories_show = [x for x in CATEGORIES.keys()]
+        reply_keyboard = [categories_show[:2], categories_show[2:4], categories_show[4:]]
+        print(reply_keyboard)
         update.message.reply_text('All right. Last question: Category.',
                                   reply_markup=ReplyKeyboardMarkup(
                                       reply_keyboard,
                                       one_time_keyboard=True,
-                                      input_field_placeholder='Choose category.'
-                                  ))
+                                      input_field_placeholder='Choose category.',
+                                      resize_keyboard=True)
+                                  )
         return CATEGORY
 
 
 def add_category(update: Update, context: CallbackContext) -> int:
     """Saves the category and uploads gathered information to json"""
-    context.user_data['category'] = update.message.text.lower()
+    context.user_data['category'] = CATEGORIES[update.message.text]
     name = context.user_data['name']
     url = link_creator.create_link(context.user_data)
     chat_id = update.message.chat_id
 
     data = data_handler.get_data_by_id(chat_id)
-    data[name] = {"Number": 0, "Url": url}
+    data[name] = {"Number": 0, "Counter": 0, "Url": url}
     data_handler.update_user_data(chat_id, data)
     update.message.reply_text(f'Successfully added {name} to the database.', reply_markup=ReplyKeyboardRemove())
 
@@ -163,7 +173,9 @@ def add_category(update: Update, context: CallbackContext) -> int:
 
 def cancel(update: Update, context: CallbackContext) -> int:
     """Cancels and ends the conversation."""
-    update.message.reply_text('Okay. Back to the main menu. Press /start to begin.', parse_mode='HTML')
+    update.message.reply_text('Okay. Back to the main menu. Press /start to begin.',
+                              parse_mode='HTML',
+                              reply_markup=ReplyKeyboardRemove())
     context.user_data.clear()
 
     return ConversationHandler.END
@@ -251,7 +263,7 @@ def main() -> None:
             DISTANCE: [MessageHandler(Filters.text(DISTANCES), add_distance)],
             PRICE: [MessageHandler(Filters.regex(r"^([0-9]|[0-9][0-9]|[0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]|"
                                                  r"[0-9][0-9][0-9][0-9][0-9])-([0-9]|[0-9][0-9]|[0-9][0-9][0-9]|"
-                                                 r"[0-9][0-9][0-9][0-9])$"), add_price)],
+                                                 r"[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9])$"), add_price)],
             CATEGORY: [MessageHandler(Filters.text(CATEGORIES), add_category)]
         },
         fallbacks=[CommandHandler('cancel', cancel)]))
