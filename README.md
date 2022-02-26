@@ -38,12 +38,19 @@ For example purposes let's assume that we want to search for a cross motor.
 Let's type *cross*.
 ![/add picture](images/add.jpg)
 2. Now you have two options. Provide the link by yourself or type `no link` (case insensitive) to make one with an inbuilt creator.
+
 Version 1:
+
 ![/add_link_manually](images/add_link_manually.jpg)
+
 Version 2:
+
 ![/add_no_link](images/add_no_link.jpg)
+
 3. Now the bot will ask you a few questions. About location, search distance, price range and category. Based on provided information the creator will make a link by itself. 
+
 ![/add_conversation](images/add_conversation.jpg)
+
 4. Congratulations! You have successfully added a new item to your list.
 
 ### Third step
