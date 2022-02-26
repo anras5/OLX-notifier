@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 import requests
 from data_handler import DataHandler
 
-COOLDOWN = 6
+COOLDOWN = 10
 
 
 def olx_checker(url: str) -> int:
@@ -43,8 +43,8 @@ def message_maker(user_id: str) -> str:
                 content += f"New offers {name}. " \
                            f"Difference {current_number_offer - previous_number_offer} " \
                            f"URL: {url}\n"
+                values["Counter"] = COOLDOWN
             values["Number"] = current_number_offer
-            values["Counter"] = COOLDOWN
 
     data_handler.update_user_data(user_id, new_data=data)
 

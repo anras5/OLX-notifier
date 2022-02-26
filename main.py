@@ -12,7 +12,7 @@ from keep_alive import keep_alive
 
 load_dotenv()
 
-API_KEY = os.environ.get('PEEPOLEAVEBOT_API_KEY')
+API_KEY = os.environ.get('API_KEY')
 DEVELOPER_CHAT_ID = os.environ.get('DEVELOPER_CHAT_ID')
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -130,7 +130,6 @@ def add_distance(update: Update, context: CallbackContext) -> int:
 def add_price(update: Update, context: CallbackContext) -> int:
     """Saves the price range"""
     price_from, price_to = map(int, update.message.text.split('-'))
-    print(price_from, price_to)
 
     if price_from > price_to:
         update.message.reply_text('Wrong usage. FROM has to be lower than TO. Try again.')
@@ -144,7 +143,7 @@ def add_price(update: Update, context: CallbackContext) -> int:
 
         categories_show = [x for x in CATEGORIES.keys()]
         reply_keyboard = [categories_show[:2], categories_show[2:4], categories_show[4:]]
-        print(reply_keyboard)
+
         update.message.reply_text('All right. Last question: Category.',
                                   reply_markup=ReplyKeyboardMarkup(
                                       reply_keyboard,
@@ -257,7 +256,7 @@ def main() -> None:
     dispatcher.add_handler(ConversationHandler(
         entry_points=[CommandHandler('add', add)],
         states={
-            NAME: [MessageHandler(Filters.regex(r"^(?!\/cancel$)"), add_name)],
+            NAME: [MessageHandler(Filters.regex(r"^(?!\/)"), add_name)],
             LINK: [MessageHandler(Filters.regex(r"^(https:\/\/.*olx.pl\/.*|(?i)no link)$"), add_link)],
             LOCATION: [MessageHandler(Filters.text(LOCATIONS), add_location)],
             DISTANCE: [MessageHandler(Filters.text(DISTANCES), add_distance)],

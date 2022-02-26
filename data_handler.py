@@ -36,13 +36,13 @@ class DataHandler:
             try:
                 del data[str(user_id)][name]
             except KeyError:
-                return "This entry does not exist in your database\." \
-                       " Try another one or using ` /add ` to firstly add an item\."
+                return "This item does not exist on your list\." \
+                       " Try another one or using ` /add ` to add the item first\."
 
         with open(self.path, "w") as json_file:
             json.dump(data, json_file, indent=4)
 
-        return f'{name} successfully deleted from your database\.'
+        return f'{name} successfully deleted from your list\.'
 
     def add_user(self, user_id):
         """Allows to add new user to the database"""
