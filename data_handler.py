@@ -18,6 +18,12 @@ class DataHandler:
             data = json.load(json_file)
         return data[str(user_id)]
 
+    def is_user_in_database(self, user_id):
+        """Returns True if user is in database -> if not returns False"""
+        with open(self.path, "r") as json_file:
+            data = json.load(json_file)
+            return str(user_id) in data
+
     def update_user_data(self, user_id, new_data):
         """Allows to upload new data for a particular user identified by their user id on Telegram"""
         with open(self.path, "r") as json_file:
@@ -50,8 +56,7 @@ class DataHandler:
         with open(self.path, "r") as json_file:
             data = json.load(json_file)
 
-            if str(user_id) not in data.keys():
-                data[user_id] = {}
+            data[str(user_id)] = {}
 
         with open(self.path, "w") as json_file:
             json.dump(data, json_file, indent=4)

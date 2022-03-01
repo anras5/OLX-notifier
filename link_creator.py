@@ -15,7 +15,7 @@ class LinkCreator:
             base += f'{data["category"]}/'
         if 'location' in data:
             base += f'{data["location"]}/'
-        base += f'q-{data["name"]}/'
+        base += f'q-{data["name"].replace(" ", "-")}/'
         if 'price_from' in data and 'price_to' in data:
             base += f'{self.price_from}{data["price_from"]}'
             base += f'{self.price_to}{data["price_to"]}'
