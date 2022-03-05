@@ -12,7 +12,7 @@ from keep_alive import keep_alive
 
 load_dotenv()
 
-API_KEY = os.environ.get('API_KEY')
+API_KEY = os.environ.get('PEEPOLEAVEBOT_API_KEY')
 DEVELOPER_CHAT_ID = os.environ.get('DEVELOPER_CHAT_ID')
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -34,7 +34,7 @@ CATEGORIES = {
 SECONDS = 15
 
 
-def log_in(func):
+def is_in_database(func):
     """Wrapper for adding user to the database"""
 
     def wrap(*args, **kwargs):
@@ -47,7 +47,7 @@ def log_in(func):
     return wrap
 
 
-@log_in
+@is_in_database
 def start(update: Update, context: CallbackContext) -> None:
     username = update.message.from_user.first_name
 
@@ -62,17 +62,27 @@ def start(update: Update, context: CallbackContext) -> None:
         f'/set\t - to set the timer\n'
         f'/unset\t - to unset the timer\n'
         f'/delete\t - to delete a record from your list\n'
-        f'/mydata\t - to see your list fo items\n',
+        f'/mydata\t - to see your list of items\n',
         parse_mode='HTML')
 
 
-@log_in
+@is_in_database
+def get_help(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text(
+        f'If you have encountered a problem, a bug or you have an idea how to improve the bot '
+        f'contact me via email: anras1filip@gmail.com\n'
+        f'Type /start to see available commands.'
+    )
+
+
+@is_in_database
 def add(update: Update, context: CallbackContext) -> int:
     """Adds a new item to search for"""
     update.message.reply_sticker('CAACAgQAAxkBAAED-t9iE7RwHrtiBrcDDjDIuhCOqWwHOAACTAEAAqghIQZjKrRWscYWyCME')
     update.message.reply_text(
         'All right!\n'
-        'First of all, send me the name of an item you wish to add.')
+        'First of all, send me the name of an item you wish to add.\n'
+        'Type /cancel to go back.')
 
     return NAME
 
@@ -84,7 +94,11 @@ def add_name(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         'Thank you!'
         ' Now you can send me the link to the item or you can type "no link" to make one with the creator.',
-        parse_mode='HTML'
+        reply_markup=ReplyKeyboardMarkup(
+            [['no link']],
+            one_time_keyboard=True,
+            resize_keyboard=True
+        )
     )
 
     return LINK
@@ -128,7 +142,8 @@ def add_location(update: Update, context: CallbackContext) -> int:
                                   )
         return DISTANCE
     else:
-        update.message.reply_text('All right. Now choose the price.\nType FROM-TO range. For example 200-500.')
+        update.message.reply_text('All right. Now choose the price.\nType FROM-TO range. For example 200-500.',
+                                  reply_markup=ReplyKeyboardRemove())
         return PRICE
 
 
@@ -194,17 +209,7 @@ def cancel(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-@log_in
-def delete(update: Update, context: CallbackContext):
-    """Allows the user to delete data"""
-    chat_id = update.message.chat_id
-
-    name = context.args[0]
-    text = data_handler.delete_data(chat_id, name)
-    update.message.reply_text(text, parse_mode='MarkdownV2')
-
-
-@log_in
+@is_in_database
 def set_timer(update: Update, context: CallbackContext) -> None:
     """Add a job to the queue."""
     chat_id = update.message.chat_id
@@ -253,8 +258,38 @@ def unset(update: Update, context: CallbackContext) -> None:
     update.message.reply_text(text)
 
 
-@log_in
-def user_data(update: Update, context: CallbackContext):
+@is_in_database
+def delete(update: Update, context: CallbackContext) -> int:
+    """Allows the user to delete an item"""
+    chat_id = update.message.chat_id
+
+    user_data = data_handler.get_data_by_id(chat_id)
+    if user_data:
+        names = [name for name in user_data.keys()]
+        reply_keyboard = [names[x:x + 2] for x in range(0, len(names), 2)]
+        update.message.reply_text('Choose the item you want to delete. Type /cancel to go back.',
+                                  reply_markup=ReplyKeyboardMarkup(
+                                      reply_keyboard,
+                                      one_time_keyboard=True,
+                                      input_field_placeholder='Choose the item to delete.',
+                                      resize_keyboard=True)
+                                  )
+        return 0
+    else:
+        update.message.reply_text('Nothing to delete. Try /add to add an item first.')
+        return ConversationHandler.END
+
+
+def delete_item(update: Update, context: CallbackContext) -> int:
+    chat_id = update.message.chat_id
+    name = update.message.text
+    text = data_handler.delete_data(chat_id, name)
+    update.message.reply_text(text, reply_markup=ReplyKeyboardRemove())
+    return ConversationHandler.END
+
+
+@is_in_database
+def my_data(update: Update, context: CallbackContext):
     """Allows the user to read their data"""
     chat_id = update.message.chat_id
 
@@ -274,7 +309,7 @@ def main() -> None:
     dispatcher = updater.dispatcher
 
     dispatcher.add_handler(CommandHandler('start', start))
-    dispatcher.add_handler(CommandHandler('help', start))
+    dispatcher.add_handler(CommandHandler('help', get_help))
     dispatcher.add_handler(ConversationHandler(
         entry_points=[CommandHandler('add', add)],
         states={
@@ -288,10 +323,18 @@ def main() -> None:
             CATEGORY: [MessageHandler(Filters.text(CATEGORIES), add_category)]
         },
         fallbacks=[CommandHandler('cancel', cancel)]))
-    dispatcher.add_handler(CommandHandler('delete', delete))
+    dispatcher.add_handler(ConversationHandler(
+        entry_points=[CommandHandler('delete', delete)],
+        states={
+            0: [MessageHandler(Filters.regex(r"^(?!\/cancel)$"), delete_item)]
+        },
+        fallbacks=[CommandHandler('cancel', cancel)]
+    )
+
+    )
     dispatcher.add_handler(CommandHandler("set", set_timer))
     dispatcher.add_handler(CommandHandler("unset", unset))
-    dispatcher.add_handler(CommandHandler('mydata', user_data))
+    dispatcher.add_handler(CommandHandler('mydata', my_data))
 
     updater.start_polling()
     updater.idle()

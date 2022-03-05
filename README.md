@@ -27,9 +27,6 @@ Type:
 
 To use the **OLX_Notifier** just click the following link: https://t.me/motorki_notifier_bot and start chatting.
 
-**IMPORTANT** \
-Remember to start the conversation with `/start`. Otherwise the bot won't work properly.
-
 ### Second step
 
 1. Type the `/add` command to add an item to your list.
