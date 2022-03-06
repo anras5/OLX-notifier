@@ -12,7 +12,7 @@ from keep_alive import keep_alive
 
 load_dotenv()
 
-API_KEY = os.environ.get('PEEPOLEAVEBOT_API_KEY')
+API_KEY = os.environ.get('API_KEY')
 DEVELOPER_CHAT_ID = os.environ.get('DEVELOPER_CHAT_ID')
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -21,9 +21,19 @@ logger = logging.getLogger(__name__)
 data_handler = DataHandler()
 link_creator = LinkCreator()
 
-NAME, LINK, LOCATION, DISTANCE, PRICE, CATEGORY = range(6)
+NAME, LINK, LOCATION, DISTANCE, PRICE, ADD_PRICE_TO, CATEGORY = range(7)
 LOCATIONS = ['Poland', 'Poznan', 'Warszawa']
 DISTANCES = ['0', '5', '10', '15', '30', '50', '75', '100']
+PRICES_FROM = ['0', '100',
+               '200', '500',
+               '750', '1000',
+               '1500', '2000',
+               '3000', '5000']
+PRICES_TO = ['0', '500',
+             '1000', '1500',
+             '2000', '3000',
+             '5000', '10000',
+             '15000', '20000']
 CATEGORIES = {
     'Motoryzacja': 'motoryzacja',
     'Samochody': 'motoryzacja/samochody',
@@ -31,7 +41,7 @@ CATEGORIES = {
     'Instrumenty': 'muzyka-edukacja/instrumenty',
     'Pozostałe': 'oferty'
 }
-SECONDS = 15
+SECONDS = 20
 
 
 def is_in_database(func):
@@ -132,7 +142,7 @@ def add_link(update: Update, context: CallbackContext) -> int:
 def add_location(update: Update, context: CallbackContext) -> int:
     """Saves the location of the new item"""
     context.user_data['location'] = update.message.text.lower()
-    if context.user_data['location'] in {'poznan', 'warszawa'}:
+    if update.message.text in LOCATIONS[1:]:
         reply_keyboard = [DISTANCES[x:x + 4] for x in range(0, len(DISTANCES), 4)]
         update.message.reply_text('All right. Now choose the search radius.',
                                   reply_markup=ReplyKeyboardMarkup(
@@ -150,37 +160,68 @@ def add_location(update: Update, context: CallbackContext) -> int:
 def add_distance(update: Update, context: CallbackContext) -> int:
     """Saves the search radius"""
     context.user_data['distance'] = update.message.text
+    reply_keyboard = [PRICES_FROM[x:x + 2] for x in range(0, len(PRICES_FROM), 2)]
     update.message.reply_text('All right. Now choose the price.\n'
-                              'Type FROM-TO range. For example 200-500. Type 0-0 to skip this step.',
-                              reply_markup=ReplyKeyboardRemove())
+                              'Type FROM-TO range. For example 200-500. Type 0-0 to skip this step.\n'
+                              'You can also use buttons to choose FROM price and then TO price.',
+                              reply_markup=ReplyKeyboardMarkup(
+                                  reply_keyboard,
+                                  one_time_keyboard=True,
+                                  input_field_placeholder='Type FROM-TO price range or choose FROM price.',
+                              ))
     return PRICE
 
 
 def add_price(update: Update, context: CallbackContext) -> int:
     """Saves the price range"""
-    price_from, price_to = map(int, update.message.text.split('-'))
-
-    if price_from > price_to:
-        update.message.reply_text('Wrong usage. FROM has to be lower than TO. Try again.')
-        return PRICE
-    else:
-        if price_from == price_to == '0':
-            pass
-        elif price_from <= price_to:
-            context.user_data['price_from'] = str(price_from)
-            context.user_data['price_to'] = str(price_to)
-
-        categories_show = [x for x in CATEGORIES.keys()]
-        reply_keyboard = [categories_show[x:x + 2] for x in range(0, len(categories_show), 2)]
-
-        update.message.reply_text('All right. Last question: Category.',
+    message = tuple(map(int, update.message.text.split('-')))
+    if len(message) == 1:
+        context.user_data['price_from'] = message[0]
+        prices_to_display = list(filter(lambda x: int(x) > context.user_data['price_from'], PRICES_TO))
+        reply_keyboard = [prices_to_display[x:x + 2] for x in range(0, len(prices_to_display), 2)]
+        update.message.reply_text('Now choose the TO price.',
                                   reply_markup=ReplyKeyboardMarkup(
                                       reply_keyboard,
                                       one_time_keyboard=True,
-                                      input_field_placeholder='Choose category.',
-                                      resize_keyboard=True)
-                                  )
-        return CATEGORY
+                                      input_field_placeholder='Choose TO price.'
+                                  ))
+        return ADD_PRICE_TO
+
+    else:
+        price_from, price_to = map(int, update.message.text.split('-'))
+
+        if price_from > price_to:
+            update.message.reply_text('Wrong usage. FROM has to be lower than TO. Try again.')
+            return PRICE
+        else:
+            if price_from == price_to == '0':
+                pass
+            elif price_from <= price_to:
+                context.user_data['price_from'] = price_from
+                context.user_data['price_to'] = price_to
+
+            display_categories(update, context)
+            return CATEGORY
+
+
+def add_price_to(update: Update, context: CallbackContext) -> int:
+    """Saves the TO price"""
+    context.user_data['price_to'] = update.message.text
+    display_categories(update, context)
+    return CATEGORY
+
+
+def display_categories(update: Update, context: CallbackContext) -> None:
+    categories_show = [x for x in CATEGORIES.keys()]
+    reply_keyboard = [categories_show[x:x + 2] for x in range(0, len(categories_show), 2)]
+
+    update.message.reply_text('All right. Last question: Category.',
+                              reply_markup=ReplyKeyboardMarkup(
+                                  reply_keyboard,
+                                  one_time_keyboard=True,
+                                  input_field_placeholder='Choose category.',
+                                  resize_keyboard=True)
+                              )
 
 
 def add_category(update: Update, context: CallbackContext) -> int:
@@ -317,9 +358,12 @@ def main() -> None:
             LINK: [MessageHandler(Filters.regex(r"^(https:\/\/.*olx.pl\/.*|(?i)no link)$"), add_link)],
             LOCATION: [MessageHandler(Filters.text(LOCATIONS), add_location)],
             DISTANCE: [MessageHandler(Filters.text(DISTANCES), add_distance)],
-            PRICE: [MessageHandler(Filters.regex(r"^([0-9]|[0-9][0-9]|[0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]|"
-                                                 r"[0-9][0-9][0-9][0-9][0-9])-([0-9]|[0-9][0-9]|[0-9][0-9][0-9]|"
-                                                 r"[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9])$"), add_price)],
+            PRICE: [MessageHandler(
+                Filters.regex(r"^([0-9]|[0-9][0-9]|[0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]|"
+                              r"[0-9][0-9][0-9][0-9][0-9])-([0-9]|[0-9][0-9]|[0-9][0-9][0-9]|"
+                              r"[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9])$") | Filters.text(PRICES_FROM),
+                add_price)],
+            ADD_PRICE_TO: [MessageHandler(Filters.text(PRICES_TO), add_price_to)],
             CATEGORY: [MessageHandler(Filters.text(CATEGORIES), add_category)]
         },
         fallbacks=[CommandHandler('cancel', cancel)]))
